@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@apollo/experimental-nextjs-app-support": "^0.11.10",
+    "@carbon/colors": "^11.30.0",
+    "@carbon/react": "^1.78.0",
+    "sass": "^1.85.1"
+  }
+}
