@@ -8,6 +8,24 @@ import {
   InMemoryCache,
 } from "@apollo/experimental-nextjs-app-support";
 
+const cache = new InMemoryCache({
+  typePolicies: {
+    Query: {
+      fields: {
+        pokemons: {
+          keyArgs: ['search', 'type', 'isFavorite'],
+          merge(existing, incoming) {
+            if (!existing) {
+              return incoming;
+            }
+            return {...existing, edges:[...existing.edges, ...incoming.edges]};
+          },
+        }
+      }
+    }
+  }
+})
+
 function makeClient() {
   const httpLink = new HttpLink({
     uri: "https://4000-brainsoft-eu-frontend-co-4vqxsmn2dm.app.codeanywhere.com/graphql",
@@ -16,7 +34,7 @@ function makeClient() {
   });
 
   return new ApolloClient({
-    cache: new InMemoryCache(),
+    cache,
     link: httpLink,
   });
 }
