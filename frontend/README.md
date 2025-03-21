@@ -1,36 +1,16 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# implementation notes
 
-## Getting Started
+This piece was implemented in CodeAnywhere environment (hence references to .coderanywhere URLs), since localhost runtimes are not fully supported.
 
-First, run the development server:
+## How to run
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+To run the frontend run `npm run dev`. The production bould requires building and isn't optimized.
+Turbo build has been disabled to avoid issues with sass imports.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Design details
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Uses redux for general app state (e.g. Toast, Filters)
+    - This allows for cleaner ownership (content handles its own fetchin/inf scroll & just reacts to state change)
+- Use apollo for data state (e.g. Updates the cache on mutations to avoid unneccessary refetches)
+- Uses Carbon elements for standardized buildup
+- Uses grid for Pokemon Cards (using standardized breakpoints + mobile phone breakpoint)

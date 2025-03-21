@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.scss";
 import { ApolloWrapper } from "./ApolloWrapper";
+import StoreProvider from './StoreProvider';
 
 export const metadata: Metadata = {
   title: "Pokedex",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <ApolloWrapper>{children}</ApolloWrapper>
+        <StoreProvider>
+          <ApolloWrapper>{children}</ApolloWrapper>
+        </StoreProvider>
       </body>
     </html>
   );

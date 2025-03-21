@@ -3,6 +3,8 @@
     "@apollo/experimental-nextjs-app-support": "^0.11.10",
     "@carbon/colors": "^11.30.0",
     "@carbon/react": "^1.78.0",
+    "@reduxjs/toolkit": "^2.6.1",
+    "react-redux": "^9.2.0",
     "sass": "^1.85.1"
   }
 }

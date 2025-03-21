@@ -2,14 +2,31 @@
 "use client";
 import styles from "./page.module.scss";
 import { gql, useQuery } from '@apollo/client';
-import { ComboBox, TextInput, ContentSwitcher, Switch, Grid, Column} from "@carbon/react"
-import {SwitchEventHandlersParams} from "@carbon/react/lib/components/ContentSwitcher/ContentSwitcher";
-import {OnChangeData} from "@carbon/react/lib/components/ComboBox/ComboBox";
-import { List as ListIcon, Grid as GridIcon} from '@carbon/icons-react';
 import {useState, useRef, useEffect} from 'react'
-import {PokemonInfo} from './shared/types';
-import { Card, CardSkeleton } from "./components/card";
+import {PokemonInfo} from '@/app/shared/types';
+import { useAppSelector } from "@/lib/hooks";
+import { useAppDispatch } from "@/lib/hooks";
+import { Card, CardSkeleton } from "@/app/components/card";
+import { ToastContainer } from "@/app/components/toast";
+import { ErrorMessage, Message } from '@/app/components/message';
+import { FilterToolbar } from '@/app/components/toolbar'
+import { resetLimit, increaseLimit, LIMIT } from "@/lib/features/filters/filtersSlice";
 
+export default function Home() {
+  // Allows attaching toast to the outermost div
+  const toastProps = useAppSelector((state) => state.toast.props);
+  const toast = toastProps ? <ToastContainer {...toastProps} /> : null; 
+  
+  return (
+    <div>
+        {toast}
+        <FilterToolbar />
+        <div className={styles.scrollable_content}>
+        <Content />
+        </div>
+    </div>
+  );
+}
 
 interface PokemonListResponse {
   pokemons: {edges: PokemonInfo[]}
@@ -29,54 +46,47 @@ const GET_POKEMON_LIST = gql`
   }
 `;
 
-export default function Home() {
-  const [view, setView] = useState<'list'|'grid'>('grid');
-  const [isFavorite, setFavorite] = useState<boolean>(false);
-  const [limit, setLimit] = useState<number>(8);
-  const [search, setSearch] = useState<string>("");
-  const [type, setType] = useState<string>("");
+function Content() {
+  const dispatch = useAppDispatch();
+  // Search filters
+  const view = useAppSelector((state) => state.filters.view);
+  const search = useAppSelector((state) => state.filters.search);
+  const type = useAppSelector((state) => state.filters.type);
+  const isFavorite = useAppSelector((state) => state.filters.isFavorite);
+  const limit = useAppSelector((state) => state.filters.limit);
+
+  // Signals whether we should refetch the data
+  const shouldRefetch = useAppSelector((state) => state.filters.refetch);
+
+  // Used for signalling loading when fetchMore is active
   const [isFetching, setIsFetching] = useState(false);
 
-  const observerTarget = useRef(null);
 
-  const initVariables = {search, type, isFavorite, offset: 0, limit: 8};
+  // Used for the infinite scroll
+  const observerTarget = useRef(null);
 
   const { loading, data, error, fetchMore, refetch } = useQuery<PokemonListResponse>(
     GET_POKEMON_LIST,
-    {variables:{...initVariables, limit}}
+    {variables:{search, type, isFavorite, offset: 0, limit}}
   );
 
-  const onSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const search = e.target.value;
-    refetch({...initVariables, search}).then(() => {setSearch(search);});
+  // Refetch data when filters change
+  if (shouldRefetch) {
+    refetch({search, type, isFavorite, offset: 0, limit: LIMIT})
+      .finally(() => {dispatch(resetLimit());})
   }
 
-  const onTypeChange = (e: OnChangeData<string>) => {
-    const type = e.selectedItem ?? ""
-    refetch({...initVariables, type}).then(() => {setType(type);});
-  }
-
-  const onFavoriteFilter = (e: SwitchEventHandlersParams) => {
-    const isFavorite = e.name === 'favorite';
-    refetch({...initVariables, isFavorite}).then(() => {setFavorite(isFavorite);});
-  }
-
-  const onGridChange = (e: SwitchEventHandlersParams) => {
-    if (e.name !== 'list' && e.name !== 'grid') {
-      setView('list');
-      throw new Error('Invalid view type');
-    }
-    setView(e.name);
-  }
-
+  const isLoading = loading || isFetching;
+  // Infinite scroll listener - always attached to the last item
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries[0].isIntersecting || loading || error || (data?.pokemons.edges.length ?? 0) < limit || isFetching) {return;}
+        // Listen only if at last visible item while we didn't hit end of the list.
+        if (!entries[0].isIntersecting || error || (data?.pokemons.edges.length ?? 0) < limit || isLoading) {return;}
         setIsFetching(true);
-        fetchMore({variables:{...initVariables, offset: data?.pokemons.edges.length ?? 0}}).then((q) => {
-          setLimit(limit + (q.data?.pokemons.edges.length ?? 0));
-        }).finally(() => {setIsFetching(false);})
+        fetchMore({variables:{search, type, isFavorite, limit: LIMIT, offset: data?.pokemons.edges.length ?? 0}})
+          .then(() => {dispatch(increaseLimit());})
+          .finally(() => {setIsFetching(false);})
       },
       { threshold: 1 }
     );
@@ -89,82 +99,45 @@ export default function Home() {
         observer.unobserve(current);
       }
     };
-  }, [observerTarget, loading, error, fetchMore, initVariables, data, limit, isFetching]);
+  });
 
-  let content = (<Content pokemons={[]} isLoading={true} isList={view === 'list'} />);
   if (error) {
-    // Raise a bug/refresh?
-    content = (<div>PokeNet failed.. :(</div>);
-  } else if (data) {
-    content = (<Content pokemons={data.pokemons.edges} isLoading={loading || isFetching} isList={view === 'list'} />);
+    return <ErrorMessage />;
   }
-  
-  return (
-    <div className={styles.page}>
-        <FilterToolbar onSearch={onSearch} onTypeChange={onTypeChange} onFavoriteFilter={onFavoriteFilter} onGridChange={onGridChange} />
-        {content}
-        <div ref={observerTarget}></div>
-    </div>
-  );
-}
 
-function Content({pokemons, isList, isLoading = false}: {pokemons: PokemonInfo[], isList: boolean, isLoading?: boolean}) {
-  const layout = isList ? {span: 16} : {span: 4};
+  const isList = view === 'list';
 
+  // Generates loading skeletons
   const loadingPokemons = isLoading ? Array(8).fill(null).map((_, index) => (
-    <Column key={index} style={{paddingBottom: 10}} {...layout}>
-      <CardSkeleton isDetail={false} isList={isList}/>
-    </Column>
+    <CardSkeleton key={`skeleton${index}`} isDetail={false} isList={isList}/>
   )) : null;
 
-  const pokemonCards = pokemons.map((p) => {return (<Column style={{paddingBottom: 10}} {...layout} key={"col"+p.id}><Card key={"pokemon"+p.id} pokemon={p} isList={isList}/></Column>);});
+  const retrievedPokemon = data?.pokemons.edges ?? [];
+  const pokemonCards = [];
+  let i = -1;
+  // Preffered standard for of to reduce iterations compared to filter & map
+  for (const p of retrievedPokemon) {
+    i++;
+    if (isFavorite && !p.isFavorite) {continue;}
+    // Attach infinite scroll observer on the last item and when we aren't fetching.
+    const infiniteScrollObs = (retrievedPokemon.length -1 === i && !isLoading ? <div key={"scroll"+p.id} ref={observerTarget}></div> : null);
+    const card = (
+      <div key={"card_wrapper"+p.id} className={styles.card_wrapper}>
+        {infiniteScrollObs}
+        <Card key={"pokemon"+p.id} pokemon={p} isList={isList}/>
+      </div>
+    );
+    pokemonCards.push(card);
+  }
 
   if (!isLoading && !pokemonCards.length) {
-    return (<div>No pokemons found...</div>);
+    return (<Message title="No pokemon found..." subtitle="Try a different filter combination" />);
   }
 
-  return (<Grid style={{marginBottom: 10}}>
-    {pokemonCards}
-    {loadingPokemons}
-  </Grid>);
-}
-
-function FilterToolbar({ onSearch, onTypeChange, onFavoriteFilter, onGridChange}: {onSearch: (i: React.ChangeEvent<HTMLInputElement>)=>void, onTypeChange: (i: OnChangeData<string>)=>void, onFavoriteFilter: (i: SwitchEventHandlersParams)=>void, onGridChange: (i: SwitchEventHandlersParams)=>void}) {
-  const {error, data} = useQuery<PokemonTypesResponse>(GET_POKEMON_TYPES);
-  if (error) {
-    return (<div>Error loading types</div>)
-  }
   return (
-    <div>
-      <Grid style={{alignItems: 'end'}}>
-        <Column span={16} style={{paddingBottom: 10}}>
-         <ContentSwitcher selectedIndex={0} onChange={onFavoriteFilter} size={"lg"}>
-            <Switch name="all" text="All" />
-            <Switch name="favorite" text="Favorites" />
-          </ContentSwitcher>
-        </Column>
-        <Column span={8} style={{paddingBottom: 10}}>
-          <TextInput placeholder="Search" labelText="" id="search-bar" type="text" onChange={onSearch} />
-        </Column>
-        <Column span={6} style={{paddingBottom: 10}}>
-          <ComboBox id="pokemonType" placeholder="Type" titleText="" items={data?.pokemonTypes ?? []} onChange={onTypeChange} />
-        </Column>
-        <Column span={2} style={{paddingBottom: 10}}>
-          <ContentSwitcher selectedIndex={0} onChange={onGridChange} size={"sm"}>
-            <Switch name="grid"><GridIcon /></Switch>
-            <Switch name="list"><ListIcon /></Switch>
-          </ContentSwitcher>
-        </Column>
-      </Grid>
+    <div className={isList ? styles.list : styles.grid}>
+      {pokemonCards}
+      {loadingPokemons}
     </div>
-  )
+    );
 }
-
-
-interface PokemonTypesResponse {
-  pokemonTypes: string[];
-}
-
-const GET_POKEMON_TYPES = gql`
-  query { pokemonTypes }
-`;

@@ -1,44 +1,40 @@
-/* Enable hover only on non-touch devices */
-@media (hover: hover) and (pointer: fine) {
-  a.primary:hover {
-    background: var(--button-primary-hover);
-    border-color: transparent;
+.scrollable_content {
+  top: 20vh;
+  position: absolute;
+  width: 100%;
+  height: 80vh;
+}
+
+@mixin content {
+  padding: 20px;
+  width: 100%;
+  display: grid;
+  gap: 10px;
+}
+
+.grid {
+  @include content;
+  // grid sizes re carbon sizing
+  @media only screen and (max-width: 672px) {
+    grid-template-columns: repeat(1, 1fr);
   }
 
-  a.secondary:hover {
-    background: var(--button-secondary-hover);
-    border-color: transparent;
+  @media only screen and (min-width: 672px) {
+    grid-template-columns: repeat(3, 1fr);
   }
 
-  .footer a:hover {
-    text-decoration: underline;
-    text-underline-offset: 4px;
+  @media only screen and (min-width: 1056px) {
+    grid-template-columns: repeat(5, 1fr);
   }
 }
 
-.card {
-  display: flex;
-  width: 100%;
+.list {
+  @include content;
+  grid-template-columns: repeat(1, 1fr);
+}
 
-  &___in_list {
-    display: flex;
-    width: 100%;
-    flex-direction: row;
-    justify-content: flex-start;
-    align-items: center;
-  }
-
-  &___in_grid {
-    display: flex;
-    width: 100%;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  &_subline {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    width: 100%;
-  }
+.card_wrapper:hover {
+  scale: 1.05;
+  z-index: 5;
+  transition: 0.2s ease-in-out;
 }

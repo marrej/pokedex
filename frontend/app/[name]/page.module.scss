@@ -1,0 +1,24 @@
+.grid {
+    padding: 20px;
+    width: 100%;
+    display: grid;
+    gap: 10px;
+    // grid sizes re carbon sizing
+    @media only screen and (max-width: 672px) {
+        grid-template-columns: repeat(1, 1fr);
+    }
+
+    @media only screen and (min-width: 672px) {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    @media only screen and (min-width: 1056px) {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.card_wrapper:hover {
+    scale: 1.05;
+    z-index: 5;
+    transition: 0.2s ease-in-out;
+}

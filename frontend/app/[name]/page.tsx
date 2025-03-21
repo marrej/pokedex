@@ -1,11 +1,11 @@
 // Stanza required for the apollo next.js integration
 "use client";
-
+import styles from "./page.module.scss";
 import { CardSkeleton, Card } from "../components/card";
 import { PokemonDetail } from "../shared/types";
 import { gql, useQuery } from '@apollo/client';
 import { useParams } from 'next/navigation'
-import { Grid, Column} from "@carbon/react"
+import { ErrorMessage, Message } from "@/app/components/message"
 
 const GET_POKEMON_DETAILS = gql`
   query PokemonByName($name: String!) { 
@@ -38,23 +38,26 @@ export default function Detail() {
     if (loading) {
       return (<div style={{padding: 10}}><CardSkeleton isList={false} isDetail={true} /></div>)
     }
-    if (!data || error) {
-      return (<div style={{padding: 10}}>PokeNet failed.. :(</div>);
+
+    if (error) {
+      return (<ErrorMessage />);
+    } else if (!data) {
+      return <Message title={`${name} not found`} subtitle={"Please try a different pokemon name"} />
     }
 
     const evolutions = (
       <div style={{marginTop: 10}}>
         <h2>Evolutions</h2>
-        <Grid>
+        <div className={styles.grid}>
           {
           (data.pokemonByName.evolutions ?? []).map(p => {
             return (
-              <Column style={{marginBottom: 10}} lg={'75%'} md={'50%'} sm={'100%'} key={"col"+p.id}>
-                <Card key={"pokemon"+p.id} pokemon={{...p, types: []}} isList={false}/>
-              </Column>
+              <div key={"pokemon_wrapper"+p.id} className={styles.card_wrapper}>
+              <Card key={"pokemon"+p.id} pokemon={{...p, types: []}} isList={false}/>
+              </div>
             );
           })}
-        </Grid>
+        </div>
       </div>
     );
 

@@ -2,49 +2,120 @@
 import Image from "next/image";
 import styles from "./card.module.scss";
 import { gql, useMutation } from '@apollo/client';
-import {Tile, ToastNotification, SkeletonPlaceholder, SkeletonText} from "@carbon/react"
-import {Favorite, FavoriteFilled, } from '@carbon/icons-react';
+import {Tile, SkeletonPlaceholder, SkeletonText, Loading} from "@carbon/react"
+import {Favorite, FavoriteFilled, VolumeUpFilled } from '@carbon/icons-react';
 import {useState, useEffect, Fragment} from 'react';
 import {PokemonInfo} from '../shared/types';
-import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation'
+import { useAppDispatch } from "@/lib/hooks";
+import { addToast } from "@/lib/features/toast/toastSlice";
+import { ApolloCache } from "@apollo/client";
+
 
 const ADD_FAVORITE_POKEMON = gql`
-  mutation FavoritePokemon($id: ID!) { favoritePokemon(id: $id) { id, name } }
+  mutation FavoritePokemon($id: ID!) {
+    favoritePokemon(id: $id) {
+      id,
+      name,
+      types,
+      image,
+      isFavorite,
+    }
+  }
 `;
 
 const REMOVE_FAVORITE_POKEMON = gql`
-  mutation UnfavoritePokemon($id: ID!) { unFavoritePokemon(id: $id) { id, name } }
+  mutation UnfavoritePokemon($id: ID!) {
+    unFavoritePokemon(id: $id) {
+      id,
+      name,
+      types,
+      image,
+      isFavorite,
+    }
+  }
 `;
 
 export interface CardProps {
   pokemon: PokemonInfo;
-  // Use an enum for Grid/List/Detail?
   isList: boolean;
   isDetail?: boolean;
 }
 
+interface CacheRef {
+  __ref: string;
+}
+
 export function Card({pokemon, isList, isDetail = false}: CardProps) {
+  // Updates the favorite pokemon when mutation is executed
+  const modifyCache = (cache: ApolloCache<unknown>, prev: {edges: CacheRef[]}, data?: PokemonInfo) => {
+    if (!data) {
+      return prev;
+    }
+    const newPokemonsRef = cache.writeFragment({
+      data,
+      fragment: gql`
+        fragment NewPokemon on Pokemon {
+          id,
+          name,
+          types,
+          image,
+          isFavorite,
+        }
+      `,
+    });
+    if (!newPokemonsRef) {return prev;}
+
+    const index = prev.edges.findIndex((p: {__ref: string}) => p.__ref === newPokemonsRef?.__ref)
+    if (index < 0) {return prev;}
+
+    const edges = [...prev.edges];
+    edges.splice(index, 1, newPokemonsRef);
+    return {...prev, edges};
+  }
+
   const [favorite, setFavorite] = useState(pokemon.isFavorite);
-  const [addFavorite, addRes] = useMutation(ADD_FAVORITE_POKEMON);
-  const [removeFavorite, removeRes] = useMutation(REMOVE_FAVORITE_POKEMON);
-  const [toast, showToast] = useState<ToastProps|null>(null)
-  const router = useRouter()
+  const [addFavorite, addRes] = useMutation(ADD_FAVORITE_POKEMON, {
+    update(cache, data) {
+      cache.modify({
+        fields: {
+          pokemons(existingPokemons) {
+            return modifyCache(cache, existingPokemons, data.data?.favoritePokemon);
+          }
+        }
+      });
+    }
+  });
+  const [removeFavorite, removeRes] = useMutation(REMOVE_FAVORITE_POKEMON, {
+    update(cache, data) {
+      cache.modify({
+        fields: {
+          pokemons(existingPokemons) {
+            return modifyCache(cache, existingPokemons, data.data?.unFavoritePokemon);
+          }
+        }
+      });
+    }
+  });
+  const dispatch = useAppDispatch();
+
+  const [isNavigating, setNavigationLoader] = useState(false);
 
   useEffect(() => {
     const res = favorite ? removeRes : addRes;
     const title = `${pokemon.name} favorite ${favorite ? "removed" : "added"}`
     if (res.error) {
-      showToast({title, kind: 'error'});
+      dispatch(addToast({title, kind: 'error'}));
     } else if (res.data){
-      // Resets the response so we don't fall in this branch again
+      // Resets the response so we can rely on the response as source of truth for signalling
       res.reset();
-      showToast({title, kind: 'success'});
+      dispatch(addToast({title, kind: 'success'}));
       setFavorite(!favorite);
     }
-  }, [addRes, removeRes, favorite, pokemon.name]);
+  }, [addRes, removeRes, favorite, pokemon.name, dispatch]);
 
 
+  // Executes favorite mutation on interaction
   const onFavorite = () => {
     const variables = {variables: {id: pokemon.id}};
     if (favorite) {
@@ -54,18 +125,22 @@ export function Card({pokemon, isList, isDetail = false}: CardProps) {
     }
   }
 
+  const router = useRouter()
   const toDetail = () => {
     if (isDetail) {return;}
+    // Add navigation loader
+    setNavigationLoader(true);
     router.push(`/${pokemon.name}`)
   }
 
+  // Additional details, shown only when isDetail is true
   const additionalDetails = (
     <Fragment>
       <div style={{width: '100%'}}>
         <Indicator val={pokemon.maxCP} text="CP" style={styles.indicator_cp}/>
         <Indicator val={pokemon.maxHP} text="HP" style={styles.indicator_hp}/>
       </div>
-      <div className={styles.row}>
+      <div className={styles.measurement_grid}>
         <Measurement text="Weight" val={pokemon.weight} />
         <Measurement text="Height" val={pokemon.weight} />
       </div>
@@ -74,9 +149,9 @@ export function Card({pokemon, isList, isDetail = false}: CardProps) {
 
   return (
     <div>
-      {toast ? <ToastContainer title={toast.title} kind={toast.kind}/> : undefined}
+      {isNavigating ? <Loading /> : null}
       <Tile className={isList ? styles.card___in_list : styles.card___in_grid}>
-        <div className={isDetail ? '' : styles.is_clickable} onClick={toDetail} style={{height: isList ? 70 : 300, width: isList ? 70 : '100%', padding: isList ? '5px 5px' : '20px 10px', backgroundColor: 'white', marginBottom: isList? 0 : 10, marginRight: isList ? 10 : 0, alignContent: 'center', textAlign: 'center'}}>
+        <div className={`${isDetail ? '' : styles.is_clickable} ${isList ? styles.img__in_list : styles.img__in_grid}`} onClick={toDetail}>
             <Image
               aria-hidden
               src={pokemon.image}
@@ -85,18 +160,29 @@ export function Card({pokemon, isList, isDetail = false}: CardProps) {
               height={1700}
               style={{width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '100%'}}
             />
+            {pokemon.sound ? <div className={styles.sound_wrapper}><PlaySound sound={pokemon.sound}/></div> : null}
         </div>
         <div className={styles.card_subline}>
           <div>
             <h3 className={isDetail ? '' : styles.is_clickable} onClick={toDetail}>{pokemon.name}</h3>
             <p>{pokemon.types.join(", ")}</p>
           </div>
-          <div className={styles.is_clickable + ' ' + styles.favorite} onClick={onFavorite}>{favorite ? <FavoriteFilled /> : <Favorite />}</div>
+          <div className={styles.is_clickable + ' ' + styles.favorite} onClick={onFavorite}>
+            {favorite ? <FavoriteFilled /> : <Favorite />}
+          </div>
         </div>
         {isDetail ? additionalDetails : null}
       </Tile>
     </div>
   )
+}
+
+function PlaySound({sound}: {sound: string}) {
+  const audio = new Audio(sound);
+  const onClick = () => {
+    audio.play();
+  }
+  return (<VolumeUpFilled width={30} height={30} onClick={onClick} />);
 }
 
 function Measurement({val, text}: {val?: {minimum: number, maximum: number}, text: string}) {
@@ -127,43 +213,21 @@ export function CardSkeleton({isList, isDetail}: CardSkeletonProps) {
   return (
     <div>
       <Tile className={isList ? styles.card___in_list : styles.card___in_grid}>
-        <div style={{height: isList ? 70 : 300, width: isList ? 70 : '100%', backgroundColor: 'white', marginBottom: isList? 0 : 10, marginRight: isList ? 10 : 0,  alignContent: 'center', textAlign: 'center'}}>
-          <SkeletonPlaceholder className={styles.skeleton_image} />
+        <div className={isList ? styles.skeleton_image___in_list : styles.skeleton_image___in_grid}>
+          <SkeletonPlaceholder className={styles.skeleton_image_content}/>
         </div>
         <div className={styles.skeleton_subline}>
           <SkeletonText className={styles.skeleton_text} />
           <SkeletonText className={styles.skeleton_text} />
         </div>
-        <div style={{display: isDetail ? 'block' : 'none'}} className={styles.skeleton_subline}>
-          <SkeletonText className={styles.skeleton_text} />
-          <SkeletonText className={styles.skeleton_text} />
-        </div>
+        {
+        isDetail ?
+          <div className={styles.skeleton_subline}>
+            <SkeletonText className={styles.skeleton_text} />
+            <SkeletonText className={styles.skeleton_text} />
+          </div> : null
+        }
       </Tile>
     </div>
   )
 }
-
-
-interface ToastProps {
-    kind: 'error' | 'success' | 'warning' | 'info';
-    title: string;
-    timeout?: number;
-}
-
-export const ToastContainer = ({ title, kind, timeout = 30000 }: ToastProps) => {
-return createPortal(
-        <ToastNotification
-        kind={kind}
-        timeout={timeout}
-        title={title}
-        style={{
-            position: 'fixed',
-            bottom: '2rem',
-            right: '2rem',
-            zIndex: 9999,
-        }}
-        />,
-        document.body,
-        'toast-container'
-    );
-};
