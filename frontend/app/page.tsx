@@ -119,8 +119,9 @@ function Content() {
   for (const p of retrievedPokemon) {
     i++;
     if (isFavorite && !p.isFavorite) {continue;}
-    // Attach infinite scroll observer on the last item and when we aren't fetching.
-    const infiniteScrollObs = (retrievedPokemon.length -1 === i && !isLoading ? <div key={"scroll"+p.id} ref={observerTarget}></div> : null);
+    // Observe infinite scroll only on last item before all items are loaded, while not loading.
+    const isInfiniteScrollObserver = limit <= retrievedPokemon.length && retrievedPokemon.length -1 === i && !isLoading;
+    const infiniteScrollObs = ( isInfiniteScrollObserver ? <div key={"scroll"+p.id} ref={observerTarget}></div> : null);
     const card = (
       <div key={"card_wrapper"+p.id} className={styles.card_wrapper}>
         {infiniteScrollObs}
